@@ -77,6 +77,8 @@ class K_means(object):
 			for j, p in enumerate(cumulative_probabilities):
 				if rand < p:
 					i = j
+					print(i)
+					print(X[i])
 					break
 			centroids.append(X[i])
 		return centroids
@@ -196,7 +198,7 @@ class K_means(object):
 		----------
 		'''
 		# make range n_iter
-		for x in range(5000):
+		for x in range(500):
 			itter_centroid_points = []
 			# find new clusters with newly found centroid
 			clusters = self.cluster_points(data, n_clusters, centroids)
