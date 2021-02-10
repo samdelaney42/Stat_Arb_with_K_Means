@@ -8,3 +8,4 @@ To do:
   - beta lookback periods
   - Z score entry and exit thresholds
 - Itterate through clusters and generate porfolios with multiple pairs positions
+- would beta from rolling OLS reg generate different hedge ratio?
