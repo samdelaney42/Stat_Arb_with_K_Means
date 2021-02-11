@@ -12,3 +12,5 @@ To do:
 
 - implement stop loss function at spread z-score = 3 sigma
   - could pair this with re performing ADF to check if basic hypothesis has been nullified 
+  
+- Take profit function at mean reversion to 0? depends on risk apetite.  
