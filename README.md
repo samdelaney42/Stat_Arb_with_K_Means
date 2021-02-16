@@ -13,4 +13,5 @@ To do:
   - could pair this with re performing ADF to check if basic hypothesis has been nullified 
   
 - PCA for features?
+- trailing stop loss
    
