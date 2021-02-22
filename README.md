@@ -14,6 +14,8 @@ To do:
   
 - PCA for features?
 - trailing stop loss
+  - Add discrete positon sizing
+  - Add $ value stop loss / take profit 
 - daily updated portfolio summary
 - IEX & EDGAR API Daily pull to keep base clustering info up to date 
 - performance metrics:
