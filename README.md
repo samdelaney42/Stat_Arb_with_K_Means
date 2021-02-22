@@ -17,11 +17,11 @@ To do:
 - daily updated portfolio summary
 - IEX & EDGAR API Daily pull to keep base clustering info up to date 
 - performance metrics:
--   CAGR
--   Sharpe
--   Calmar
--   Maximum Drawdown
--   Maximum Drawdown Duration
+  - CAGR
+  - Sharpe
+  - Calmar
+  - Maximum Drawdown
+  - Maximum Drawdown Duration
 
-- Sharpe assumes Gaussian returns. That is why Maximum Drawdown is used to reveal the tail risks. Similar assumptions when you compute the portfolio risk & return. Beware of the covariance matrix! 
+  - Sharpe assumes Gaussian returns. That is why Maximum Drawdown is used to reveal the tail risks. Similar assumptions when you compute the portfolio risk & return. Beware of the covariance matrix! 
    
