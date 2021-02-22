@@ -14,4 +14,6 @@ To do:
   
 - PCA for features?
 - trailing stop loss
+- daily updated portfolio summary
+- IEX & EDGAR API Daily pull to keep base clustering info up to date 
    
