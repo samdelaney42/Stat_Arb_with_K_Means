@@ -27,5 +27,5 @@ To do:
 
   - Sharpe assumes Gaussian returns. That is why Maximum Drawdown is used to reveal the tail risks. Similar assumptions when you compute the portfolio risk & return. Beware of the covariance matrix! 
 
-- Dynamic time warping for some features used in kmeans?
+- Dynamic time warping?
    
