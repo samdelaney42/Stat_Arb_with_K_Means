@@ -16,6 +16,7 @@ To do:
 - [ ] trailing stop loss
   - [x] Add discrete positon sizing
   - [ ] Add $ value stop loss / take profit 
+  - [ ] Explore momentum as extra validation layer for trade criteria
 - [ ] daily updated portfolio summary
 - [ ] IEX & EDGAR API Daily pull to keep base clustering info up to date 
    - https://github.com/datasets/s-and-p-500-companies-financials     
