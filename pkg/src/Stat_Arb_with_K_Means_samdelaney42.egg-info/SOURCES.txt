@@ -6,6 +6,8 @@ src/Stat_Arb_with_K_Means_samdelaney42.egg-info/SOURCES.txt
 src/Stat_Arb_with_K_Means_samdelaney42.egg-info/dependency_links.txt
 src/Stat_Arb_with_K_Means_samdelaney42.egg-info/top_level.txt
 src/clustering/__init__.py
-src/clustering/stat_arb_clustering.py
+src/clustering/make_clusters.py
 src/statarb/__init__.py
-src/statarb/stat_arb_model.py
+src/statarb/graphs.py
+src/statarb/make_model.py
+src/statarb/make_model_w_graphs.py
