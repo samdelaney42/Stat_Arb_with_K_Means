@@ -10,6 +10,7 @@ from sklearn.cluster import KMeans
 from statsmodels.tsa.api import adfuller
 from sklearn.preprocessing import StandardScaler
 from dateutil.relativedelta import relativedelta
+from statsmodels.regression.rolling import RollingOLS
 
 # Modify some settings
 plt.rcParams['figure.figsize'] = (15, 7)
@@ -19,32 +20,108 @@ plt.rcParams['figure.dpi'] = 150
 pd.options.display.max_rows = 20
 pd.options.display.max_columns = 15
 
-class statarb(object):
+class StatArbBuilder:
+    def __init__(self,
+                 s1, 
+                 s2, 
+                 start, 
+                 end,):
+        self._s1 = s1 # name of stock one
+        self._s2 = s2 # name of stock two 
+        self._start = start
+        self._end = end
+        self._valid_pair = True
+        try:
+            self._df1 = pdr.get_data_yahoo(self._s1, self._start, self._end) # dataframe of stock one
+        except:
+            print("Can't get data for {}".format(self._s1))
+            self._valid_pair = False
+        try:
+            self._df2 = pdr.get_data_yahoo(self._s2, self._start, self._end) # dataframe of stock two
+        except:
+            print("Can't get data for {}".format(self._s2))
+            self._valid_pair = False
+
+    def build(self):
+
+        return self._valid_pair
+        
+class StatArb(object):
     '''
-    Stat Arb object with ..... atributes 
-    methods
+    Attributes
+        s1: str
+            name of stock 1
+        s2: str
+            name of stock 2
+        start: datetime
+            start date of backtest period
+        end: datetime
+            end date of backtest period
+        ma: int
+            moving average window used in calc of rolling z-score (default = 28)
+        floor / ceiling: float
+            trade entry criteria (default = +/-2.0)
+        stop_loss_long / short: float
+            trade stop loss criteria (default = +/-3.0)
+        beta_lookback: int
+            lookback window used when calculating hedge ratio (default = 14)
+        allocation: int
+            dollar value of funds to use (default = 10,000)
+        exit_zscore: float
+            Z-score at which we close position (default = 0) 
+        show_plot: boolean
+            define if you want to see charts (default = True)
     -------
-        create_spread:
-        check_cointergration:
-        generate_signal:
-        generate_trades:
-        generate_portfolio:
-        generate_daily_book:
-        generate_metrics:
-        inputs: 
-        attributes:
+    
+    Methods
+    -------
+        show_pair()
+            displays daily price charts of chosen stocks through chosen dates
+        test_coint()
+            returns if pair is cointergrated to quickly check if its worth back testing
+        backtest_pair()
+            backtests pair using all methods below
+        generate_spread()
+            takes daily closing prices, caluclating the hedge ratios and spreads of the assets
+        generate_cointergration()
+            Checks if the pair is currently cointergrated and to what significance
+        generate_signal()
+            takes spread and generates signals indicating trade entry / exit / stop out for long and short positions
+        generate_trades()
+            defines the postions of both stocks in the pair. i.e. long trade, stock 1 = positive, stock 2 = negative
+        generate_portfolio()
+            shows our portfolio returns and equity curve
+        generate_order_book()
+            shows the dates on which we would of placed orders (buy or sell) for each stock and quantity of shares for each
+        generate_metrics()
+            Shows various portfolio and return metrics e.g. sharp ratio, avg wins / lossesetc
     -----
     '''
-    def __init__(self, df1, df2, s1, s2, ma, floor, ceiling, stop_loss_long, stop_loss_short, beta_lookback, start, end, allocation, pair, exit_zscore=0):
-        self.df1 = df1 # dataframe of stock one
-        self.df2 = df2 # dataframe of stock two
+
+    def __init__(self, 
+                 s1, 
+                 s2, 
+                 start, 
+                 end, 
+                 ma=28, 
+                 floor=-2.0, 
+                 ceiling=2.0, 
+                 stop_loss_long=-3.0, 
+                 stop_loss_short=3.0, 
+                 beta_lookback=28, 
+                 allocation=10000, 
+                 exit_zscore=0, 
+                 show_plot = True):
         self.s1 = s1 # name of stock one
-        self.s2 = s2 # name of stock two        
-        self.df = pd.DataFrame(index = df1.index) # new df for data_cleaning method
-        self.signals = pd.DataFrame(index = df1.index)
-        self.trades = pd.DataFrame(index = df1.index)
-        self.portfolio = pd.DataFrame(index = df1.index)
-        self.metrics = pd.DataFrame(index = df1.index)
+        self.s2 = s2 # name of stock two 
+        self.df1 = pdr.get_data_yahoo(s1, start, end) # dataframe of stock one
+        self.df2 = pdr.get_data_yahoo(s2, start, end) # dataframe of stock two
+        self.df = pd.DataFrame(index = self.df1.index) # new df for data_cleaning method
+        self.signals = pd.DataFrame(index = self.df1.index)
+        self.trades = pd.DataFrame(index = self.df1.index)
+        self.portfolio = pd.DataFrame(index = self.df1.index)
+        self.metrics = pd.DataFrame(index = self.df1.index)
+        self.book = pd.DataFrame(index = range(len(self.df1)))
         self.ma = ma # moving average period
         self.floor = floor # buy threshold for z-score
         self.ceiling = ceiling # sell threshold for z-score
@@ -55,47 +132,96 @@ class statarb(object):
         self.beta_lookback = beta_lookback # lookback of beta for hedge ratio
         self.start = start # begining of test period
         self.end = end # end of test period
-        self.exit_zscore = exit_zscore # z-score
-        self.allocation = allocation
-        self.pair = pair
+        self.exit_zscore = exit_zscore # z-score at which trade is closed
+        self.allocation = allocation # dollar value of funds
+        self.pair = self.s1 + " and " + self.s2 + " Backtest"
+        self.show_plot = show_plot 
         
-        self.ind = pd.MultiIndex.from_product([self.df.index, [self.s1, self.s2]], names=['Date', 'Stock'])
-        self.bk = pd.DataFrame(index=self.ind)
-        
-        with plt.style.context(['seaborn-paper']): 
-            ma1 = df1['Close'].rolling(window=self.ma).mean()
-            std1 = df1['Close'].rolling(window=self.ma).std() 
-            upper1 = ma1 + (std1 * 2)
-            lower1 = ma1 - (std1 * 2)
-
-            ma2 = df2['Close'].rolling(window=self.ma).mean()
-            std2 = df2['Close'].rolling(window=self.ma).std() 
-            upper2 = ma2 + (std2 * 2)
-            lower2 = ma2 - (std2 * 2)
-
-            plt.plot(df1['Close'],label=self.s1)
-            plt.plot(upper1, 'r', alpha=0.5)
-            plt.plot(lower1, 'r', alpha=0.5)
-            plt.plot(ma1, 'r', alpha=0.5)
-            plt.fill_between(df1.index, upper1, lower1, alpha=0.1)
-            plt.plot(df2['Close'],label=self.s2)
-            plt.plot(upper2, 'g', alpha=0.5)
-            plt.plot(lower2, 'g', alpha=0.5)
-            plt.plot(ma2, 'g', alpha=0.5)
-            plt.fill_between(df1.index, upper2, lower2, alpha=0.1)
-            plt.title(self.s1 + ' and ' + self.s2 + ' Over ' + str(self.start.year) + ' - ' + str(self.end.year))
-            plt.legend(loc=0)
-            plt.show()
-        
-    def create_spread(self):
+    def show_pair(self):
         '''
-        parameters
-        ----------
-            self: object: statarb object
-        returns
-        ----------
-            self: df: dataframe with chosen stock prices cov, var, beta, hedge ratio and spreads
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+		'''
+
+        if self.show_plot == False:
+            print("show_plot = False")
+        else:
+            with plt.style.context(['seaborn-paper']): 
+                ma1 = self.df1['Close'].rolling(window=self.ma).mean()
+                std1 = self.df1['Close'].rolling(window=self.ma).std() 
+                upper1 = ma1 + (std1 * 2)
+                lower1 = ma1 - (std1 * 2)
+
+                ma2 = self.df2['Close'].rolling(window=self.ma).mean()
+                std2 = self.df2['Close'].rolling(window=self.ma).std() 
+                upper2 = ma2 + (std2 * 2)
+                lower2 = ma2 - (std2 * 2)
+
+                plt.plot(self.df1['Close'],label=self.s1)
+                plt.plot(upper1, 'r', alpha=0.5)
+                plt.plot(lower1, 'r', alpha=0.5)
+                plt.plot(ma1, 'r', alpha=0.5)
+                plt.fill_between(self.df1.index, upper1, lower1, alpha=0.1)
+                plt.plot(self.df2['Close'],label=self.s2)
+                plt.plot(upper2, 'g', alpha=0.5)
+                plt.plot(lower2, 'g', alpha=0.5)
+                plt.plot(ma2, 'g', alpha=0.5)
+                plt.fill_between(self.df1.index, upper2, lower2, alpha=0.1)
+                plt.title(self.s1 + ' and ' + self.s2 + ' ' + str(self.start) + ' to ' + str(self.end))
+                plt.legend(loc=0)
+                plt.show()
+                
+    def test_coint(self):
         '''
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+            nothing
+                a check of cointergration. Useful for running through combinations of stocks in a cluster
+        '''
+        
+        self.generate_spread()
+        self.generate_cointergration()
+            
+    def backtest_pair(self):
+        '''
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+            nothing
+                fully backtests a given pair of stocks
+		'''
+        
+        self.get_spread = self.generate_spread()
+        self.get_coint = self.generate_cointergration()
+        self.get_signals = self.generate_signal()
+        self.get_trades = self.generate_trades()
+        self.get_portfolio = self.generate_portfolio()
+        self.get_book = self.generate_order_book()
+        self.get_metrics = self.generate_metrics()
+        
+        
+    def generate_spread(self):
+        '''
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+			self: df 
+                dataframe with chosen stock prices cov, var, beta, hedge ratio and spreads
+		'''
         
         # take closing price of chose stocks and add to new dataframe
         self.df[self.s1] = self.df1['Close']
@@ -106,12 +232,11 @@ class statarb(object):
         # (in this case univariate) regression. Given this, it also represents the min variance hedge ratio. 
         # this is a rolling regression.
         ############# need to experiment with different values for lookback window
-        self.df['cov'] = self.df[self.s1].rolling(self.beta_lookback).cov(self.df[self.s2])
-        self.df['var'] = self.df[self.s2].rolling(self.beta_lookback).var()
-        self.df['beta'] = self.df['cov'] / self.df['var']
-        
-        # set hedge ratio equal to beta of pair
-        self.df['Hedge_Ratio'] = self.df['beta']
+
+        rolling_model = RollingOLS(self.df[self.s1], self.df[self.s2], window=self.beta_lookback)
+        fitted = rolling_model.fit()
+
+        self.df['Hedge_Ratio'] = fitted.params
         
         # the spread. For each stock_1 purchased we sell n * stock_2 where n is our hedge ratio
         # If the stocks are cointegrated, it implies the spread equation is stationary, I.E. mean and var are same over time
@@ -123,15 +248,16 @@ class statarb(object):
 
         return self.df
     
-    def check_cointergration(self):
+    def generate_cointergration(self):
         '''
-        parameters
-        ----------
-            self: object: statarb object
-        returns
-        ----------
-            string: stated significance level of the chosen stock cointergration
-        ''' 
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+		''' 
+
         ####### can imporve this method with matrix vectorization 
         # find coint
         # tells us on a given confidence level weather the par is cointegrated and thus stationary
@@ -149,13 +275,16 @@ class statarb(object):
     
     def generate_signal(self):
         '''
-        parameters
-        ----------
-            self: object: statarb object
-        returns
-        ----------
-            self: df: dataframe with 1 or 0 values for long, short, and exit signals, and in position markers
-        ''' 
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+			signas: df 
+                dataframe with 1 or 0 values for long, short, and exit signals, and in position markers
+		''' 
+
         # use z scores to generate buy, sell, exit signals
         # floor and ceiling threshold should be between 1.5 and 2 sigma (change depending on backtest results)
         # LONG SIGNAL = LONG THE SPREAD: BUY STOCK 1, SELL STOCK 2
@@ -166,7 +295,8 @@ class statarb(object):
         # Z = (X - mean) / SD
         # given time series mean and SD will be rolling, using a moving average window
         # create stock z score of the pair spread
-        self.signals['Z_Score'] = ((self.df['Spread'] - self.df['Spread'].rolling(window = self.ma).mean()) / (self.df['Spread'].rolling(window = self.ma).std()))
+        self.signals['Z_Score']=((self.df['Spread'] - self.df['Spread'].rolling(window=self.ma).mean())/
+                                 (self.df['Spread'].rolling(window=self.ma).std()))
 
         # create prior stock z score        
         self.signals['Prior_Z_Score'] = self.signals['Z_Score'].shift(1)
@@ -215,7 +345,8 @@ class statarb(object):
                     self.In_Short = False
                     self.Short_Signal = False
                     self.signals.iloc[i]['In_Short'] = 0.0
-                    self.signals.iloc[i]['Cover_Short'] = 1.0
+                    # reset cover 
+                    self.signals.iloc[i]['Cover_Short'] = 0.0
                     # if stopped, wait untill we reach exit critera to re-enter teade
                     if current_z <= self.exit_zscore:
                         self.Stopped_Short = False
@@ -240,11 +371,13 @@ class statarb(object):
                     self.signals.iloc[i]['In_Long'] = 0.0
                     self.Long_Signal = False
                     self.signals.iloc[i]['Close_Long'] = 1.0
+                # if not stopped, have we hit close criteria?
                 elif current_z >= self.exit_zscore:
                     self.In_Long = False
                     self.signals.iloc[i]['In_Long'] = 0.0
                     self.Long_Signal = False
                     self.signals.iloc[i]['Close_Long'] = 1.0
+                # if not stopped and not closed, still in trade
                 else:
                     self.signals.iloc[i]['In_Long'] = 1.0
             else:
@@ -254,7 +387,8 @@ class statarb(object):
                     self.In_Long = False
                     self.Long_Signal = False
                     self.signals.iloc[i]['In_Long'] = 0.0
-                    self.signals.iloc[i]['Close_Long'] = 1.0
+                    # reset close
+                    self.signals.iloc[i]['Close_Long'] = 0.0
                     # if stopped, wait untill we reach exit critera to re-enter teade
                     if current_z >= self.exit_zscore:
                         self.Stopped_Long = False
@@ -272,31 +406,52 @@ class statarb(object):
         self.df['Ceiling'] = self.ceiling
         self.df['Long_Stop_Loss'] = self.stop_loss_long
         self.df['Short_Stop_Loss'] = self.stop_loss_short
+        self.signals['exit_zscore'] = self.exit_zscore
         
-        with plt.style.context(['seaborn-paper']):
-            plt.plot(self.signals['Z_Score'], label = 'Spread Z-Score')
-            plt.plot(self.signals['In_Long'], 'g', label = 'In Long Trade')
-            plt.plot(self.signals['In_Short'], 'r', label = 'In Short Trade')
-            plt.plot(self.df['Floor'], 'g--', label = 'Entry Z-Score')
-            plt.plot(self.df['Ceiling'], 'g--')
-            plt.plot(self.df['Long_Stop_Loss'], 'r--', label = 'Stop Z-Score')
-            plt.plot(self.df['Short_Stop_Loss'], 'r--')
-            plt.title(self.s1 + ' and ' + self.s2 + 'Z-Score Over ' + str(self.start.year) + ' - ' + str(self.end.year))
-            plt.legend(loc = 0)
-            plt.tight_layout()
-            plt.show()
+        if self.show_plot == False:
+            print("show_plot = False")
+        else:
+            with plt.style.context(['seaborn-paper']):
+                plt.plot(self.signals['Z_Score'], label = 'Spread Z-Score')
+                plt.plot(self.signals['exit_zscore'], label = 'Exit Z-Score')
+                plt.fill_between(self.signals.index, 
+                                 -4, 
+                                 4, 
+                                 where=self.signals['In_Long'].replace({0: False, 1:True}), 
+                                 alpha = 0.1, 
+                                 color = 'green', 
+                                 label = 'Active Long')
+                plt.fill_between(self.signals.index, 
+                                 -4, 
+                                 4, 
+                                 where=self.signals['In_Short'].replace({0: False, 1:True}), 
+                                 alpha = 0.1, 
+                                 color = 'red',
+                                 label = 'Active Short')
+                plt.plot(self.df['Floor'], 'g--', label = 'Entry Z-Score')
+                plt.plot(self.df['Ceiling'], 'g--')
+                plt.plot(self.df['Long_Stop_Loss'], 'r--', label = 'Stop Z-Score')
+                plt.plot(self.df['Short_Stop_Loss'], 'r--')
+                plt.title(self.s1 + ' and ' + self.s2 + ' Z-score ' + str(self.start) + ' to ' + str(self.end))
+                plt.legend(loc = 0)
+                plt.tight_layout()
+                plt.show()
 
         return self.signals
     
     def generate_trades(self):
         '''
-        parameters
-        ----------
-            self: object: statarb object
-        returns
-        ----------
-            Trades: df: dataframe with: long and short Positions
-        ''' 
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+			trades: df
+                dataframe with negative or positive price values for each stock depending on long or short trade
+                total indicates net value of trade
+		''' 
+
         self.trades['Positions'] = self.signals['In_Long'] - self.signals['In_Short']
         # Long stock shows negative value = price to represent cash outflow of bought share
         # short stock shows positive value = price to represent cash inflow of borrowed shares
@@ -309,13 +464,16 @@ class statarb(object):
     
     def generate_portfolio(self):
         '''
-        parameters
-        ----------
-            self: object: statarb object
-        returns
-        ----------
-            Portfolio: df: dataframe with: Returns, Trade_Returns, Portfolio_Value & Returns, Allocation, Max_Drawdown
-        ''' 
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+			portfolio: df
+                dataframe with return values for trades, and overall portfolio vlaue
+		''' 
+        
         # create percentage returns stream
         # find daily change of total market value of positions
         self.portfolio['Returns'] = self.trades['Total'].pct_change()
@@ -324,10 +482,9 @@ class statarb(object):
         self.portfolio['Returns'].replace([np.inf, -np.inf], 0.0, inplace = True)
         self.portfolio['Returns'].replace(-1.0, 0.0, inplace = True)
         
-               # getting equity curve
-        self.portfolio['Returns'] = (self.portfolio['Returns'] + 1.0).cumprod()
-        self.portfolio['Trade_Returns'] = (self.trades['Total'].pct_change())
-        self.portfolio['Portfolio_Value'] = (self.allocation * self.portfolio['Returns'])
+        # getting equity curve
+        self.portfolio['Cumulative_Returns'] = (self.portfolio['Returns'] + 1.0).cumprod()
+        self.portfolio['Portfolio_Value'] = (self.allocation * self.portfolio['Cumulative_Returns'])
         self.portfolio['Portfolio_Returns'] = self.portfolio['Portfolio_Value'].pct_change()
         self.portfolio['Allocation'] = self.allocation
         
@@ -338,112 +495,159 @@ class statarb(object):
         self.portfolio['In_Short'] = self.signals['In_Short']
         
         # plot portfolio valuation
-        with plt.style.context(['seaborn-paper']):
-            plt.plot(self.portfolio['Portfolio_Value'])
-            plt.plot(self.portfolio['Allocation'])
-            plt.plot(self.portfolio['In_Long']*10000, 'g', label = 'In Long Trade')
-            plt.plot(self.portfolio['In_Short']*10000, 'r', label = 'In Short Trade')
-            plt.title(self.s1 + ' and ' + self.s2 + ' Stat Arb Returns Over ' + str(self.start.year) + ' - ' + str(self.end.year))
-            plt.legend(loc = 0)
-            plt.tight_layout()
-            plt.show()
+        if self.show_plot == False:
+            print("show_plot = False")
+        else:
+            with plt.style.context(['seaborn-paper']):
+                plt.plot(self.portfolio['Portfolio_Value'], label = 'Portfolio_Value')
+                plt.plot(self.portfolio['Allocation'], label = 'Allocation')
+                plt.fill_between(self.portfolio.index, 
+                                 0, 
+                                 self.portfolio['Portfolio_Value'].max(), 
+                                 where=self.portfolio['In_Long'].replace({0: False, 1:True}), 
+                                 alpha = 0.1, 
+                                 color = 'green', 
+                                 label = 'Active Long')
+                plt.fill_between(self.portfolio.index, 
+                                 0, 
+                                 self.portfolio['Portfolio_Value'].max(), 
+                                 where=self.portfolio['In_Short'].replace({0: False, 1:True}), 
+                                 alpha = 0.1, 
+                                 color = 'red', 
+                                 label = 'Active Short')
+                plt.title(self.s1 + ' and ' + self.s2 + ' Portfolio Value ' + str(self.start) + ' to ' + str(self.end))
+                plt.legend(loc = 0)
+                plt.tight_layout()
+                plt.show()
             
         return self.portfolio
     
-    def generate_daily_book(self):
+    def generate_order_book(self):
         '''
-        parameters
-        ----------
-            self: object: statarb object
-        returns
-        ----------
-            Portfolio: df: dataframe with: Order Type, Quantity, Price, P/L
-        ''' 
-        #self.book = pd.DataFrame()
-        self.book = self.bk
-        self.book['Type'] = ""
-        self.book['Qty'] = 0.0
-        self.book['Price'] = 0.0
-        self.book['Profit/Loss'] = 0.0
-
-        for i, j in (self.book.groupby(level=0)):
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+			book: df
+                dataframe showing dates that a buy or sell order is made and for which stock at which quantity
+		''' 
+        
+        self.book = pd.DataFrame(index = range(len(self.signals)))
+        #self.book = self.bk
+        self.book['Date'] = ""
+        self.book['Position_Type'] = ""
+        self.book['Stock'] = ""
+        self.book['Order_Type'] = ""
+        self.book['Qty'] = 0
+        self.book['Price'] = 0
+        self.book['Profit/Loss'] = 0
+        count = 0
+        for i, j in enumerate(self.signals.iterrows()):
             
-            if self.signals.loc[i]['Long_Signal'] == 1.0:
+            if self.signals.iloc[i]['Long_Signal'] == 1.0:
                 # set type of order
-                self.book.at[(i, self.s1), 'Type'] = "Buy"
-                self.book.at[(i, self.s2), 'Type'] = "Sell"
-                # set quantity
-                self.long_quant = np.floor((self.allocation) / self.df.loc[i][self.s1])
-                self.short_quant = np.floor(self.long_quant * self.df.loc[i]['Hedge_Ratio'])
-                self.book.at[(i, self.s1), 'Qty'] = self.long_quant
-                self.book.at[(i, self.s2), 'Qty'] = self.short_quant
-                # set stock price at order
-                self.enter_long_stock_1_price = self.df.loc[i][self.s1]
-                self.enter_long_stock_2_price = self.df.loc[i][self.s2]
-                self.book.at[(i, self.s1), 'Price'] = self.enter_long_stock_1_price
-                self.book.at[(i, self.s2), 'Price'] = self.enter_long_stock_2_price
-            elif self.signals.loc[i]['Close_Long'] == 1.0:
-                self.book.at[(i, self.s1), 'Type'] = 'Sell'
-                self.book.at[(i, self.s2), 'Type'] = 'Buy'
-                self.book.at[(i, self.s1), 'Qty'] = self.long_quant
-                self.book.at[(i, self.s2), 'Qty'] = self.short_quant
-                # set stock price at order
-                self.exit_long_stock_1_price = self.df.loc[i][self.s1]
-                self.exit_long_stock_2_price = self.df.loc[i][self.s2]
-                self.book.at[(i, self.s1), 'Price'] = self.exit_long_stock_1_price
-                self.book.at[(i, self.s2), 'Price'] = self.exit_long_stock_2_price
-                # find profit / loss
-                self.book.at[(i, self.s1), 'Profit/Loss'] = ((self.exit_long_stock_1_price - self.enter_long_stock_1_price)*self.long_quant)
-                self.book.at[(i, self.s2), 'Profit/Loss'] = -1*((self.exit_long_stock_2_price - self.enter_long_stock_2_price)*self.short_quant)
-
-            if self.signals.loc[i]['Short_Signal'] == 1.0:
+                self.book.loc[count, 'Date'] = self.signals.index[i]
+                self.book.loc[count, 'Position_Type'] = "Long"
+                self.book.loc[count, 'Stock'] = self.s1
+                self.book.loc[count, 'Order_Type'] = "Buy"
+                self.long_quant = np.floor((self.allocation) / self.df.iloc[i][self.s1])
+                self.book.loc[count, 'Qty'] = self.long_quant
+                self.enter_long_stock_1_price = self.df.iloc[i][self.s1]
+                self.book.loc[count, 'Price'] = self.enter_long_stock_1_price
+                
+                self.book.loc[count+1, 'Date'] = self.signals.index[i]
+                self.book.loc[count+1, 'Position_Type'] = "Long"
+                self.book.loc[count+1, 'Stock'] = self.s2
+                self.book.loc[count+1, 'Order_Type'] = "Sell"
+                self.short_quant = np.floor(self.long_quant * self.df.iloc[i]['Hedge_Ratio'])
+                self.book.loc[count+1, 'Qty'] = self.short_quant
+                self.enter_long_stock_2_price = self.df.iloc[i][self.s2]
+                self.book.loc[count+1, 'Price'] = self.enter_long_stock_2_price
+                count += 2
+            elif self.signals.iloc[i]['Close_Long'] == 1.0:
+                self.book.loc[count, 'Date'] = self.signals.index[i]
+                self.book.loc[count, 'Position_Type'] = "Close Long"
+                self.book.loc[count, 'Stock'] = self.s1
+                self.book.loc[count, 'Order_Type'] = 'Sell'
+                self.book.loc[count, 'Qty'] = self.long_quant
+                self.exit_long_stock_1_price = self.df.iloc[i][self.s1]
+                self.book.loc[count, 'Price'] = self.exit_long_stock_1_price
+                self.book.loc[count, 'Profit/Loss'] = ((self.exit_long_stock_1_price - self.enter_long_stock_1_price)*self.long_quant)
+                
+                self.book.loc[count+1, 'Date'] = self.signals.index[i]
+                self.book.loc[count+1, 'Position_Type'] = "Close Long"
+                self.book.loc[count+1, 'Stock'] = self.s2
+                self.book.loc[count+1, 'Order_Type'] = 'Buy'
+                self.book.loc[count+1, 'Qty'] = self.short_quant
+                self.exit_long_stock_2_price = self.df.iloc[i][self.s2]
+                self.book.loc[count+1, 'Price'] = self.exit_long_stock_2_price
+                self.book.loc[count+1, 'Profit/Loss'] = -1*((self.exit_long_stock_2_price - self.enter_long_stock_2_price)*self.short_quant)
+                count += 2
+            
+            if self.signals.iloc[i]['Short_Signal'] == 1.0:
                 # set type of order
-                self.book.at[(i, self.s1), 'Type'] = "Sell"
-                self.book.at[(i, self.s2), 'Type'] = "Buy"
-                # set quantity
-                self.long_quant = np.floor((self.allocation) / self.df.loc[i][self.s2])
-                self.short_quant = np.floor(self.long_quant * (1/self.df.loc[i]['Hedge_Ratio']))
-                self.book.at[(i, self.s1), 'Qty'] = self.short_quant
-                self.book.at[(i, self.s2), 'Qty'] = self.long_quant
-                # set stock price at order
-                self.enter_short_stock_1_price = self.df.loc[i][self.s1]
-                self.enter_short_stock_2_price = self.df.loc[i][self.s2]
-                self.book.at[(i, self.s1), 'Price'] = self.enter_short_stock_1_price
-                self.book.at[(i, self.s2), 'Price'] = self.enter_short_stock_2_price
-            elif self.signals.loc[i]['Cover_Short'] == 1.0:
-                self.book.at[(i, self.s1), 'Type'] = "Buy"
-                self.book.at[(i, self.s2), 'Type'] = "Sell"
-                self.book.at[(i, self.s1), 'Qty'] = self.short_quant
-                self.book.at[(i, self.s2), 'Qty'] = self.long_quant
-                # set stock price at order
-                self.exit_short_stock_1_price = self.df.loc[i][self.s1]
-                self.exit_short_stock_2_price = self.df.loc[i][self.s2]
-                self.book.at[(i, self.s1), 'Price'] = self.exit_short_stock_1_price
-                self.book.at[(i, self.s2), 'Price'] = self.exit_short_stock_2_price
-                # find profit / loss
-                self.book.at[(i, self.s1), 'Profit/Loss'] = -1*((self.exit_short_stock_1_price - self.enter_short_stock_1_price)*self.short_quant)
-                self.book.at[(i, self.s2), 'Profit/Loss'] = ((self.exit_short_stock_2_price - self.enter_short_stock_2_price)*self.long_quant)
-        
-        self.book = self.book.loc[(self.book!=0).all(axis=1)]
-        
+                self.book.loc[count, 'Date'] = self.signals.index[i]
+                self.book.loc[count, 'Position_Type'] = "Short"
+                self.book.loc[count, 'Stock'] = self.s2
+                self.book.loc[count, 'Order_Type'] = "Buy"
+                self.long_quant = np.floor((self.allocation) / self.df.iloc[i][self.s2])
+                self.book.loc[count, 'Qty'] = self.long_quant
+                self.enter_long_stock_2_price = self.df.iloc[i][self.s2]
+                self.book.loc[count, 'Price'] = self.enter_long_stock_2_price
+                
+                self.book.loc[count+1, 'Date'] = self.signals.index[i]
+                self.book.loc[count+1, 'Position_Type'] = "Short"
+                self.book.loc[count+1, 'Stock'] = self.s1
+                self.book.loc[count+1, 'Order_Type'] = "Sell"
+                self.short_quant = np.floor(self.long_quant * self.df.iloc[i]['Hedge_Ratio'])
+                self.book.loc[count+1, 'Qty'] = self.short_quant
+                self.enter_long_stock_1_price = self.df.iloc[i][self.s1]
+                self.book.loc[count+1, 'Price'] = self.enter_long_stock_1_price
+                count += 2
+            elif self.signals.iloc[i]['Cover_Short'] == 1.0:
+                self.book.loc[count, 'Date'] = self.signals.index[i]
+                self.book.loc[count, 'Position_Type'] = "Close Short"
+                self.book.loc[count, 'Stock'] = self.s2
+                self.book.loc[count, 'Order_Type'] = 'Sell'
+                self.book.loc[count, 'Qty'] = self.long_quant
+                self.exit_long_stock_2_price = self.df.iloc[i][self.s2]
+                self.book.loc[count, 'Price'] = self.exit_long_stock_2_price
+                self.book.loc[count, 'Profit/Loss'] = ((self.exit_long_stock_2_price - self.enter_long_stock_2_price)*self.long_quant)
+                
+                self.book.loc[count+1, 'Date'] = self.signals.index[i]
+                self.book.loc[count+1, 'Position_Type'] = "Close Short"
+                self.book.loc[count+1, 'Stock'] = self.s1
+                self.book.loc[count+1, 'Order_Type'] = 'Buy'
+                self.book.loc[count+1, 'Qty'] = self.short_quant
+                self.exit_long_stock_1_price = self.df.iloc[i][self.s1]
+                self.book.loc[count+1, 'Price'] = self.exit_long_stock_1_price
+                self.book.loc[count+1, 'Profit/Loss'] = -1*((self.exit_long_stock_1_price - self.enter_long_stock_1_price)*self.short_quant)
+                count += 2
+        self.book['Cum_Sum_P_L'] = self.book['Profit/Loss'].cumsum()
+        self.book = self.book.drop(self.book.index[count:])
         return self.book
         
     def generate_metrics(self):
         '''
-        parameters
-        ----------
-            self: object: statarb object
-        returns
-        ----------
-            Portfolio: df: dataframe with: CAGR, Sharpe_RAtio, Wins, Losses, avg returns
-        ''' 
+		parameters
+		----------
+			self: object 
+                statarb object
+		returns
+		----------
+			metrics: df
+                dataframe of performance metrics
+		''' 
+
         # calculate summary statistics
         self.mu = (self.portfolio['Returns'].mean())
         self.sigma = (self.portfolio['Returns'].std())
         self.sharpe = (self.mu - 0.005) / self.sigma
         # where True, yield x, otherwise yield y
-        self.wins = (np.where(self.portfolio['Returns'] > 0.0, 1.0, 0.0)).sum()
-        self.losses = (np.where(self.portfolio['Returns'] < 0.0, 1.0, 0.0)).sum()
+        self.wins = (np.where(self.portfolio['Cumulative_Returns'] > 0.0, 1.0, 0.0)).sum()
+        self.losses = (np.where(self.portfolio['Cumulative_Returns'] < 0.0, 1.0, 0.0)).sum()
         if self.losses == 0:
             self.total_trades = self.wins
         else:
@@ -460,8 +664,8 @@ class statarb(object):
         else:
             self.p_loss = (self.losses / self.total_trades)
         # avg win / loss return
-        self.avg_win_return = (self.portfolio['Returns'] > 0.0).mean()
-        self.avg_loss_return = (self.portfolio['Returns'] < 0.0).mean()
+        self.avg_win_return = (self.portfolio['Cumulative_Returns'] > 0.0).mean()
+        self.avg_loss_return = (self.portfolio['Cumulative_Returns'] < 0.0).mean()
         # payout ratio
         if self.avg_loss_return == 0:
             self.payout_ratio = 1
@@ -481,4 +685,3 @@ class statarb(object):
         self.metrics['WL_Ratio'] = self.wl_ratio
         
         return self.metrics
-        
