@@ -120,9 +120,9 @@ class clusters(object):
 			PCA_components: df
 				dataframe, index = stock tickers, cols = selected standardised data from pca
 		'''
-		
+		print(len(self.data_std[0]))
 		# pca model
-		self.pca = PCA(self.variance, n_components = len(self.data_std[0]))
+		self.pca = PCA(n_components = len(self.data_std[0]))
 		self.principalComponents = self.pca.fit_transform(self.data_std)
 		self.PCA_components = pd.DataFrame(self.principalComponents)
 		self.PCA_components = self.PCA_components.set_index(self.symbol)

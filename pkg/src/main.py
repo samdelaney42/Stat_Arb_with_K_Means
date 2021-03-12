@@ -13,7 +13,7 @@ low_num_clusters = c.generate_low_num_clusters(max_num_stocks = 10)
 user = ""
 while user != "stop":
 
-	select_cluster = int(input("Select a cluster of stocks from the list above (I recomend 11 mitchell): "))
+	select_cluster = int(input("Select a cluster of stocks from the list above: "))
 	selected_cluster = c.generate_pairs(which_cluster = select_cluster)
 
 	in_cluster = ""
