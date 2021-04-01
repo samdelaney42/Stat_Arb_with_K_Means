@@ -1,0 +1,20 @@
+Metadata-Version: 2.1
+Name: Stat-Arb-with-K-Means-samdelaney42
+Version: 0.0.1
+Summary: Cluster stocks to find pairs and backtest them in stat arb model
+Home-page: https://github.com/samdelaney42/Stat_Arb_with_K_Means
+Author: Sam Delaney
+Author-email: smd575@nyu.edu
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/samdelaney42/Stat_Arb_with_K_Means/issues
+Description: # K_Means
+        
+        In this project I aim to re-create the unsupervised machine learning k-means clustering technique with random and plusplus initialization methods, then use the principals of this class in a stat arb trading model to find non-traditional pairs.
+        
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
