@@ -9,7 +9,7 @@ Main backetest notebook can be found in "testing" folder
 - Two stand out examples were BAC/WFC & C/JPM, demonstraing high volatilty.
 
 Next Steps:
-- Reduce idiosyncratic exposure by conducting rolling backtests in order to better select pairs (i.e. don't trade every pair per cluster)
+- Conduct rolling backtests in order to better select pairs (i.e. 1 year backtest every pair / cluster, 6 mo. trade best performing pairs, rebalance, repeat)
 -   build in X/Y vs Y/X test as rolling regression is not orthognal?
-- write method to find cumulative returns of all pairs withing clusters
+- write method to find cumulative returns of all selected pairs within clusters
 - sum these returns accross clusters
