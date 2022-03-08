@@ -9,9 +9,9 @@ Main backetest notebook can be found in "testing" folder
 To improve:
 
 - Pair selection
--   Hedge ratio currently uses OLS, implying no noise in observation of independent variable
--   result means pair X/Y performs differently from Y/X
--   Use TLS method to account for this?
+  -   Hedge ratio currently uses OLS, implying no noise in observation of independent variable
+  -   result means pair X/Y performs differently from Y/X
+  -   Use TLS method to account for this?
 
 - More robust feature selection:
 -   We want to choose fundamental statistics of stocks that we will use as features for clustering
