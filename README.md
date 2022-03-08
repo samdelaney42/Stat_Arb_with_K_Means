@@ -8,7 +8,7 @@ Main backetest notebook can be found in "testing" folder
 
 To improve:
 
-- Pair selection
+- Pair trade selection
   -   Hedge ratio currently uses OLS, implying no noise in observation of independent variable
   -   result means pair X/Y performs differently from Y/X
   -   Use TLS method to account for this?
