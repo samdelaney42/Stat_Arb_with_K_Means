@@ -15,7 +15,8 @@ To improve:
 
 - More robust feature selection:
   -   We want to choose fundamental statistics of stocks that we will use as features for clustering
-  -   We need to account for things like autocorrelation and consider over/under specification
+  -   We need to account for things like high autocorrelation
+  -   PCA will take care of most
   -   e.g. not using gross profit and revenue  
 
 - Re-Cluseter and split test every quarter
