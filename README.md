@@ -14,18 +14,18 @@ To improve:
   -   Use TLS method to account for this?
 
 - More robust feature selection:
--   We want to choose fundamental statistics of stocks that we will use as features for clustering
--   We need to account for things like autocorrelation and consider over/under specification
--   e.g. not using gross profit and revenue  
+  -   We want to choose fundamental statistics of stocks that we will use as features for clustering
+  -   We need to account for things like autocorrelation and consider over/under specification
+  -   e.g. not using gross profit and revenue  
 
 - Re-Cluseter and split test every quarter
--   As these numbers change per earnings period, the relationships between in-cluster pairs may have chnaged entirely
+  -   As these numbers change per earnings period, the relationships between in-cluster pairs may have chnaged entirely
 
 - Create overall portfolio metrics
--   Currently we only test performance of one pair at a time
--   In order to test over all performance of the model we must see performance aggregated accross pairs
+  -   Currently we only test performance of one pair at a time
+  -   In order to test over all performance of the model we must see performance aggregated accross pairs
 
 - More accurate portfolio assumtions
--   using adjusted close for entry price
--   no account for margin needed to short or capacity of strategy overall 
+  -   using adjusted close for entry price
+  -   no account for margin needed to short or capacity of strategy overall 
 
